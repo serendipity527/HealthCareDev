@@ -25,7 +25,7 @@ langchain4j:
       # DeepSeek: deepseek-chat
       # 阿里云: qwen-plus, qwen-turbo
       # Ollama: llama2, mistral 等
-      model-name: ${AI_MODEL_NAME:qwen-flash}
+      model-name: ${AI_MODEL_NAME:qwen3-max}
       
       # 温度参数（0.0-2.0，值越大回复越随机）
       temperature: 0.7
