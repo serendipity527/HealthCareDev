@@ -65,5 +65,28 @@ public class MedicalConsultationController {
                 "service", "Medical Consultation Service"
         ));
     }
+    
+    /**
+     * 获取状态图的 Mermaid 格式
+     * 可以复制到 https://mermaid.live/ 查看可视化图形
+     */
+    @GetMapping("/graph")
+    public ResponseEntity<Map<String, String>> getGraph() {
+        String mermaidDiagram = consultationService.getGraphDiagram();
+        return ResponseEntity.ok(Map.of(
+                "mermaid", mermaidDiagram,
+                "previewUrl", "https://mermaid.live/",
+                "description", "复制 mermaid 字段的内容到在线编辑器即可查看图形"
+        ));
+    }
+    
+    /**
+     * 获取纯文本格式的 Mermaid 图（方便复制）
+     */
+    @GetMapping(value = "/graph/raw", produces = "text/plain")
+    public ResponseEntity<String> getGraphRaw() {
+        String mermaidDiagram = consultationService.getGraphDiagram();
+        return ResponseEntity.ok(mermaidDiagram);
+    }
 }
 

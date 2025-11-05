@@ -7,6 +7,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.bsc.langgraph4j.CompiledGraph;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.state.AgentState;
+import org.bsc.langgraph4j.GraphRepresentation;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
@@ -35,9 +36,46 @@ public class MedicalConsultationService {
             StateGraph<AgentState> stateGraph = medicalConsultationGraph.buildGraph();
             compiledGraph = stateGraph.compile();
             log.info("医疗咨询状态图初始化完成");
+            
+            // 打印 Mermaid 格式的状态图
+            printGraphDiagram();
         } catch (Exception e) {
             log.error("初始化医疗咨询状态图失败", e);
             throw new RuntimeException("Failed to initialize medical consultation graph", e);
+        }
+    }
+    
+    /**
+     * 打印状态图的 Mermaid 格式
+     */
+    private void printGraphDiagram() {
+        try {
+            GraphRepresentation graphRep = compiledGraph.getGraph(GraphRepresentation.Type.MERMAID);
+            String mermaidDiagram = graphRep.getContent();
+            log.info("\n" + 
+                    "========================================\n" +
+                    "医疗咨询状态图 (Mermaid 格式)\n" +
+                    "========================================\n" +
+                    mermaidDiagram + "\n" +
+                    "========================================\n" +
+                    "在线预览: https://mermaid.live/\n" +
+                    "将以上 Mermaid 代码复制到在线编辑器即可查看图形\n" +
+                    "========================================");
+        } catch (Exception e) {
+            log.warn("打印状态图失败", e);
+        }
+    }
+    
+    /**
+     * 获取状态图的 Mermaid 格式（供 API 调用）
+     */
+    public String getGraphDiagram() {
+        try {
+            GraphRepresentation graphRep = compiledGraph.getGraph(GraphRepresentation.Type.MERMAID);
+            return graphRep.getContent();
+        } catch (Exception e) {
+            log.error("获取状态图失败", e);
+            return "Error: Unable to get graph diagram";
         }
     }
     
@@ -58,7 +96,7 @@ public class MedicalConsultationService {
                         .userId(userId)
                         .userInput(userInput)
                         .build();
-                
+
                 // 执行状态图
                 AgentState resultState = compiledGraph.invoke(initialState.data())
                     .orElseThrow(() -> new RuntimeException("状态图执行失败"));
