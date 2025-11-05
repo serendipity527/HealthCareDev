@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能对话</title>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 900px;
+            height: 85vh;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 头部 */
+        .chat-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .chat-header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .ai-avatar {
+            width: 50px;
+            height: 50px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .chat-title {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-title h1 {
+            font-size: 1.5em;
+            margin: 0;
+        }
+
+        .chat-status {
+            font-size: 0.85em;
+            opacity: 0.9;
+            margin-top: 3px;
+        }
+
+        .connection-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 2s infinite;
+        }
+
+        .connection-indicator.connected {
+            background: #4CAF50;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* 消息区域 */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 25px;
+            background: #f5f5f5;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            display: flex;
+            gap: 12px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .message.ai .message-avatar {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .message-bubble {
+            padding: 12px 18px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.ai .message-bubble {
+            background: white;
+            color: #333;
+            border-bottom-left-radius: 4px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .message-time {
+            font-size: 0.75em;
+            color: #999;
+            padding: 0 5px;
+        }
+
+        .message.user .message-time {
+            text-align: right;
+        }
+
+        .message-sender {
+            font-size: 0.85em;
+            color: #666;
+            font-weight: bold;
+            padding: 0 5px;
+        }
+
+        /* 系统消息 */
+        .system-message {
+            align-self: center;
+            background: rgba(0,0,0,0.05);
+            padding: 8px 15px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            color: #666;
+            max-width: 60%;
+            text-align: center;
+        }
+
+        /* 输入区域 */
+        .chat-input-area {
+            padding: 20px 25px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .user-info {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .user-info input {
+            flex: 1;
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        .user-info input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .user-info button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-connect {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .btn-connect:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(76, 175, 80, 0.3);
+        }
+
+        .btn-disconnect {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-disconnect:hover {
+            background: #da190b;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 10px;
+            align-items: flex-end;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 25px;
+            font-size: 15px;
+            resize: none;
+            max-height: 100px;
+            min-height: 45px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        .chat-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .send-button {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .send-button:hover:not(:disabled) {
+            transform: scale(1.1);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        /* 打字指示器 */
+        .typing-indicator {
+            display: none;
+            gap: 12px;
+            max-width: 80px;
+            align-items: center;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+        }
+
+        .typing-dots {
+            display: flex;
+            gap: 4px;
+            padding: 15px;
+            background: white;
+            border-radius: 18px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #999;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+            }
+            30% {
+                transform: translateY(-10px);
+            }
+        }
+
+        /* 滚动条样式 */
+        .chat-messages::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .chat-container {
+                height: 95vh;
+                border-radius: 0;
+            }
+
+            .message {
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- 头部 -->
+        <div class="chat-header">
+            <div class="chat-header-left">
+                <div class="ai-avatar">🤖</div>
+                <div class="chat-title">
+                    <h1>AI 智能助手</h1>
+                    <div class="chat-status" id="statusText">未连接</div>
+                </div>
+            </div>
+            <div class="connection-indicator" id="connectionIndicator"></div>
+        </div>
+
+        <!-- 消息区域 -->
+        <div class="chat-messages" id="chatMessages">
+            <div class="system-message">👋 欢迎使用 AI 智能对话系统</div>
+            
+            <!-- AI 打字指示器 -->
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="message-avatar" style="background: #4CAF50; color: white;">🤖</div>
+                <div class="typing-dots">
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                    <div class="typing-dot"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="chat-input-area">
+            <div class="user-info">
+                <input type="text" id="username" placeholder="请输入您的用户名" value="用户">
+                <button id="connectBtn" class="btn-connect" onclick="connect()">连接</button>
+                <button id="disconnectBtn" class="btn-disconnect" onclick="disconnect()" style="display:none;">断开</button>
+            </div>
+            <div class="input-wrapper">
+                <textarea 
+                    id="messageInput" 
+                    class="chat-input" 
+                    placeholder="输入消息..." 
+                    rows="1"
+                    disabled
+                    onkeypress="handleKeyPress(event)"
+                ></textarea>
+                <button id="sendBtn" class="send-button" onclick="sendMessage()" disabled>
+                    ➤
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let stompClient = null;
+        let currentUsername = '';
+
+        // 连接WebSocket
+        function connect() {
+            const username = document.getElementById('username').value.trim();
+            if (!username) {
+                alert('请输入用户名！');
+                return;
+            }
+
+            currentUsername = username;
+            
+            // 使用SockJS连接
+            const socket = new SockJS('http://localhost:8080/websocket');
+            stompClient = Stomp.over(socket);
+
+            // 连接到服务器
+            stompClient.connect({}, function(frame) {
+                console.log('连接成功: ' + frame);
+                updateConnectionStatus(true);
+
+                // 订阅AI回复消息（点对点）
+                stompClient.subscribe('/user/queue/ai-reply', function(message) {
+                    try {
+                        console.log('收到原始消息:', message);
+                        console.log('消息体（JSON字符串）:', message.body);
+                        const msg = JSON.parse(message.body);
+                        console.log('解析后的AI回复对象:', msg);
+                        console.log('AI回复内容:', msg.content);
+                        
+                        hideTypingIndicator();
+                        displayMessage(msg, 'ai');
+                        
+                        console.log('✅ AI消息已显示');
+                    } catch (error) {
+                        console.error('解析AI回复失败:', error);
+                        console.error('错误堆栈:', error.stack);
+                        hideTypingIndicator();
+                        addSystemMessage('❌ 消息解析失败: ' + error.message);
+                    }
+                });
+
+                addSystemMessage('✅ 连接成功！您可以开始和AI对话了');
+            }, function(error) {
+                console.error('连接失败: ' + error);
+                updateConnectionStatus(false);
+                addSystemMessage('❌ 连接失败: ' + error);
+            });
+        }
+
+        // 断开连接
+        function disconnect() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+            updateConnectionStatus(false);
+            addSystemMessage('🔌 已断开连接');
+        }
+
+        // 发送消息给AI
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const content = input.value.trim();
+
+            if (!content) {
+                return;
+            }
+
+            if (!stompClient || !stompClient.connected) {
+                alert('请先连接到服务器！');
+                return;
+            }
+
+            // 构建消息对象
+            const message = {
+                content: content,
+                sender: currentUsername,
+                receiver: 'AI',  // 发送给AI
+                type: 'CHAT'
+            };
+
+            // 立即显示用户消息
+            displayMessage({
+                content: content,
+                sender: currentUsername,
+                timestamp: new Date().toISOString(),
+                type: 'CHAT'
+            }, 'user');
+
+            // 发送到服务器
+            try {
+                stompClient.send('/app/chat/ai', {}, JSON.stringify(message));
+                console.log('✅ 消息已发送到服务器:', message);
+                console.log('发送路径: /app/chat/ai');
+            } catch (error) {
+                console.error('❌ 发送消息失败:', error);
+                addSystemMessage('❌ 发送消息失败: ' + error.message);
+                hideTypingIndicator();
+                return;
+            }
+
+            // 清空输入框
+            input.value = '';
+            input.style.height = 'auto';
+
+            // 显示AI正在输入
+            showTypingIndicator();
+        }
+
+        // 显示消息
+        function displayMessage(message, sender) {
+            console.log(`📨 开始显示消息 - 发送者类型: ${sender}`, message);
+            
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ' + sender;
+
+            // 格式化时间
+            let time = '';
+            if (message.timestamp) {
+                try {
+                    const date = new Date(message.timestamp);
+                    time = date.toLocaleTimeString('zh-CN', {
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                } catch (e) {
+                    console.warn('时间格式化失败，使用当前时间:', e);
+                    time = new Date().toLocaleTimeString('zh-CN');
+                }
+            } else {
+                time = new Date().toLocaleTimeString('zh-CN');
+            }
+
+            const avatar = sender === 'user' ? '👤' : '🤖';
+            const senderName = sender === 'user' ? (message.sender || '用户') : 'AI助手';
+            const content = message.content || '(空消息)';
+
+            console.log(`显示内容 - 头像: ${avatar}, 发送者: ${senderName}, 内容: ${content}, 时间: ${time}`);
+
+            messageDiv.innerHTML = `
+                <div class="message-avatar">${avatar}</div>
+                <div class="message-content">
+                    <div class="message-sender">${senderName}</div>
+                    <div class="message-bubble">${escapeHtml(content)}</div>
+                    <div class="message-time">${time}</div>
+                </div>
+            `;
+
+            messagesDiv.appendChild(messageDiv);
+            console.log('✅ 消息已添加到DOM');
+            
+            scrollToBottom();
+            console.log('✅ 已滚动到底部');
+        }
+
+        // 添加系统消息
+        function addSystemMessage(content) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'system-message';
+            messageDiv.textContent = content;
+            messagesDiv.appendChild(messageDiv);
+            scrollToBottom();
+        }
+
+        // 显示AI正在输入
+        function showTypingIndicator() {
+            console.log('💬 显示AI正在输入指示器...');
+            const indicator = document.getElementById('typingIndicator');
+            indicator.classList.add('active');
+            indicator.style.display = 'flex';
+            scrollToBottom();
+        }
+
+        // 隐藏AI正在输入
+        function hideTypingIndicator() {
+            console.log('💬 隐藏AI正在输入指示器...');
+            const indicator = document.getElementById('typingIndicator');
+            indicator.classList.remove('active');
+            // 稍微延迟隐藏，让动画更自然
+            setTimeout(() => {
+                indicator.style.display = 'none';
+            }, 300);
+        }
+
+        // 更新连接状态
+        function updateConnectionStatus(connected) {
+            const statusText = document.getElementById('statusText');
+            const indicator = document.getElementById('connectionIndicator');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const messageInput = document.getElementById('messageInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const usernameInput = document.getElementById('username');
+
+            if (connected) {
+                statusText.textContent = '在线';
+                indicator.classList.add('connected');
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'block';
+                messageInput.disabled = false;
+                sendBtn.disabled = false;
+                usernameInput.disabled = true;
+            } else {
+                statusText.textContent = '未连接';
+                indicator.classList.remove('connected');
+                connectBtn.style.display = 'block';
+                disconnectBtn.style.display = 'none';
+                messageInput.disabled = true;
+                sendBtn.disabled = true;
+                usernameInput.disabled = false;
+            }
+        }
+
+        // 滚动到底部
+        function scrollToBottom() {
+            const messagesDiv = document.getElementById('chatMessages');
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        // 转义HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 处理回车键
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        // 自动调整输入框高度
+        document.getElementById('messageInput').addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+        });
+
+        // 页面卸载时断开连接
+        window.onbeforeunload = function() {
+            if (stompClient !== null) {
+                stompClient.disconnect();
+            }
+        };
+
+        // 页面加载完成后初始化
+        window.onload = function() {
+            console.log('🚀 页面加载完成，初始化...');
+            // 确保打字指示器初始隐藏
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.style.display = 'none';
+                console.log('✅ 打字指示器已初始化为隐藏状态');
+            }
+        };
+    </script>
+</body>
+</html>
+
