@@ -18,6 +18,11 @@ import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class MedicalConsultationGraph {
+
+
+    /**
+     * 接收用户输入节点
+     */
     static AsyncNodeAction<MedicalConsultationState> receiveUserInputNode = node_async(state -> {
         // 接收用户输入节点，负责获取用户输入并输出到控制台，同时返回一个包含用户输入的Map
         System.out.println("receiveUserInputNode 执行中...");   // 打印节点执行提示
@@ -27,6 +32,9 @@ public class MedicalConsultationGraph {
         "messages", userInput);                  // 返回用户输入，更新状态
     });
 
+    /**
+     * 调用LLM节点
+     */
     static AsyncNodeAction<MedicalConsultationState> callLLMNode = node_async(state -> {
         System.out.println("callLLMNode 执行中...");
         List<String> messages = state.messages();
@@ -42,6 +50,7 @@ public class MedicalConsultationGraph {
     private static String callLLM(String userInput) {
         return "模拟的模型响应";
     }
+    
     public static void main(String[] args) throws Exception {
 
         // 创建状态图
