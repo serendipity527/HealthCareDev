@@ -15,8 +15,8 @@ public class MedicalConsultationState extends AgentState {
     public static final Map<String, Channel<?>> SCHEMA = Map.of(
             "userInput", Channels.base(()->"default user input") ,// 用户输入
             "modelResponse", Channels.base(()->"default model response") ,// 模型响应
-            "messages", Channels.appender(ArrayList::new) // 消息列表
-            
+            "messages", Channels.appender(ArrayList::new) ,// 消息列表
+            "intent", Channels.base(()->"default intent") // 意图
 
     );
     // 2. 构造函数
@@ -34,5 +34,9 @@ public class MedicalConsultationState extends AgentState {
     }
     public List<String> messages() {
         return this.<List<String>>value("messages").orElse(new ArrayList<>());
+    }
+    
+    public String intent() {
+        return this.<String>value("intent").orElse("");
     }
 }
