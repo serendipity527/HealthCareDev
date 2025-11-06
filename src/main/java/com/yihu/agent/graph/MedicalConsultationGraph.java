@@ -1,8 +1,8 @@
 package com.yihu.agent.graph;
 
 import com.yihu.agent.graph.state.MedicalConsultationState;
+import com.yihu.agent.service.IntentRecognitionService;
 import org.bsc.langgraph4j.CompiledGraph;
-import org.bsc.langgraph4j.GraphRepresentation;
 import org.bsc.langgraph4j.GraphStateException;
 import org.bsc.langgraph4j.StateGraph;
 import org.bsc.langgraph4j.action.AsyncCommandAction;
@@ -39,43 +39,82 @@ public class MedicalConsultationGraph {
     });
 
     /**
-     * 意图识别节点：识别用户意图（普通对话、高危医疗、非高危医疗）
+     * 创建意图识别节点：使用 AiService 识别用户意图（普通对话、高危医疗、非高危医疗）
      */
-    static AsyncNodeAction<MedicalConsultationState> intentRecognitionNode = node_async(state -> {
-        System.out.println("🔍 意图识别节点执行中...");
-        String userInput = state.userInput();
-        
-        // 简单的意图识别逻辑
-        String intent;
-        String lowerInput = userInput.toLowerCase();
-        
-        // 高危医疗关键词：胸痛、呼吸困难、昏迷、大出血等
-        if (lowerInput.contains("胸痛") || lowerInput.contains("呼吸困难") || 
-            lowerInput.contains("昏迷") || lowerInput.contains("大出血") ||
-            lowerInput.contains("心脏") || lowerInput.contains("猝死") ||
-            lowerInput.contains("急性") || lowerInput.contains("紧急")) {
-            intent = "high_risk_medical";
-            System.out.println("✅ 识别到的意图: 高危医疗");
-        } 
-        // 非高危医疗关键词：感冒、头疼、咳嗽、发烧等
-        else if (lowerInput.contains("感冒") || lowerInput.contains("头疼") || 
-                 lowerInput.contains("咳嗽") || lowerInput.contains("发烧") ||
-                 lowerInput.contains("症状") || lowerInput.contains("咨询") ||
-                 lowerInput.contains("治疗") || lowerInput.contains("药")) {
-            intent = "low_risk_medical";
-            System.out.println("✅ 识别到的意图: 非高危医疗");
-        } 
-        // 普通对话
-        else {
-            intent = "general_chat";
-            System.out.println("✅ 识别到的意图: 普通对话");
+    static AsyncNodeAction<MedicalConsultationState> createIntentRecognitionNode(IntentRecognitionService intentService) {
+        return node_async(state -> {
+            System.out.println("🔍 意图识别节点执行中（使用大模型）...");
+            String userInput = state.userInput();
+            
+            try {
+                // 使用 AiService 进行意图识别
+                String intent = intentService.recognizeIntent(userInput);
+                
+                // 清理响应，提取意图类型（确保返回标准格式）
+                intent = extractIntent(intent);
+                
+                System.out.println("✅ 大模型识别到的意图: " + intent);
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("intent", intent);
+                result.put("messages", "意图识别完成: " + intent);
+                return result;
+            } catch (Exception e) {
+                log.error("大模型意图识别失败: {}", e.getMessage(), e);
+                // 降级到默认意图：普通对话
+                String intent = "general_chat";
+                System.out.println("⚠️ 大模型调用失败，使用默认意图: " + intent);
+                
+                Map<String, Object> result = new HashMap<>();
+                result.put("intent", intent);
+                result.put("messages", "意图识别完成（降级）: " + intent);
+                return result;
+            }
+        });
+    }
+    
+    /**
+     * 从大模型响应中提取意图类型（确保返回标准格式）
+     */
+    private static String extractIntent(String response) {
+        if (response == null || response.isEmpty()) {
+            return "general_chat";
         }
         
-        Map<String, Object> result = new HashMap<>();
-        result.put("intent", intent);
-        result.put("messages", "意图识别完成: " + intent);
-        return result;
-    });
+        String lowerResponse = response.toLowerCase().trim();
+        
+        // 检查是否包含意图关键词
+        if (lowerResponse.contains("high_risk_medical") || 
+            lowerResponse.contains("highriskmedical") ||
+            lowerResponse.contains("高危医疗")) {
+            return "high_risk_medical";
+        } else if (lowerResponse.contains("low_risk_medical") || 
+                   lowerResponse.contains("lowriskmedical") ||
+                   lowerResponse.contains("非高危医疗") ||
+                   lowerResponse.contains("一般医疗")) {
+            return "low_risk_medical";
+        } else if (lowerResponse.contains("general_chat") || 
+                   lowerResponse.contains("generalchat") ||
+                   lowerResponse.contains("普通对话")) {
+            return "general_chat";
+        }
+        
+        // 如果没有明确匹配，尝试通过关键词判断
+        if (lowerResponse.contains("胸痛") || lowerResponse.contains("呼吸困难") || 
+            lowerResponse.contains("昏迷") || lowerResponse.contains("大出血") ||
+            lowerResponse.contains("心脏") || lowerResponse.contains("猝死") ||
+            lowerResponse.contains("急性") || lowerResponse.contains("紧急")) {
+            return "high_risk_medical";
+        } else if (lowerResponse.contains("感冒") || lowerResponse.contains("头疼") || 
+                   lowerResponse.contains("咳嗽") || lowerResponse.contains("发烧") ||
+                   lowerResponse.contains("症状") || lowerResponse.contains("咨询") ||
+                   lowerResponse.contains("治疗") || lowerResponse.contains("药")) {
+            return "low_risk_medical";
+        }
+        
+        // 默认返回普通对话
+        return "general_chat";
+    }
 
     /**
      * 普通对话节点
@@ -140,16 +179,18 @@ public class MedicalConsultationGraph {
     };
     
     /**
-     * 构建医疗咨询图
+     * 构建医疗咨询图（使用大模型进行意图识别）
+     * 
+     * @param intentService 意图识别服务，使用 @AiService 自动注入
      */
-    public static CompiledGraph<MedicalConsultationState> buildGraph() throws GraphStateException {
+    public static CompiledGraph<MedicalConsultationState> buildGraph(IntentRecognitionService intentService) throws GraphStateException {
         return new StateGraph<>(MedicalConsultationState.SCHEMA, MedicalConsultationState::new)
                 // 添加节点
-                .addNode("processUserInput", processUserInputNode)      // 处理用户输入
-                .addNode("intentRecognition", intentRecognitionNode)     // 意图识别
-                .addNode("generalChat", generalChatNode)                 // 普通对话
-                .addNode("highRiskMedical", highRiskMedicalNode)         // 高危医疗
-                .addNode("lowRiskMedical", lowRiskMedicalNode)           // 非高危医疗
+                .addNode("processUserInput", processUserInputNode)                          // 处理用户输入
+                .addNode("intentRecognition", createIntentRecognitionNode(intentService))  // 意图识别（使用大模型）
+                .addNode("generalChat", generalChatNode)                               // 普通对话
+                .addNode("highRiskMedical", highRiskMedicalNode)                        // 高危医疗
+                .addNode("lowRiskMedical", lowRiskMedicalNode)                          // 非高危医疗
                 
                 // START -> 处理用户输入
                 .addEdge(START, "processUserInput")
@@ -178,40 +219,29 @@ public class MedicalConsultationGraph {
     }
     
     public static void main(String[] args) throws Exception {
-        var graph = buildGraph();
+        // 注意：在 Spring Boot 环境中，应该通过依赖注入获取 IntentRecognitionService
+        // 这里仅作为示例，实际使用时应该从 Spring 容器中获取
+        System.out.println("⚠️ 注意：此 main 方法需要 Spring Boot 上下文才能运行");
+        System.out.println("   在实际使用中，应该通过 Spring Boot 的依赖注入获取 IntentRecognitionService");
+        System.out.println("   例如：在 Service 或 Controller 中注入 IntentRecognitionService，然后调用 buildGraph(intentService)");
         
-        // 打印图结构
-        GraphRepresentation graphRep = graph.getGraph(GraphRepresentation.Type.MERMAID);
-        System.out.println("========== 图结构 ==========");
-        System.out.println(graphRep);
-        System.out.println("\n");
-        
-        // 测试1: 普通对话
-        System.out.println("========== 测试1: 普通对话 ==========");
-        for (var output : graph.stream(Map.of("userInput", "你好"))) {
-            System.out.println("节点: " + output.node());
-            System.out.println("状态: " + output.state().data());
-            System.out.println("---");
+        // 示例：如何在 Spring Boot Service 中使用
+        /*
+        @Service
+        public class MedicalConsultationService {
+            @Autowired
+            private IntentRecognitionService intentRecognitionService;
+            
+            public void processUserInput(String userInput) {
+                try {
+                    var graph = MedicalConsultationGraph.buildGraph(intentRecognitionService);
+                    var result = graph.invoke(Map.of("userInput", userInput));
+                    // 处理结果...
+                } catch (GraphStateException e) {
+                    // 处理异常...
+                }
+            }
         }
-        
-        System.out.println("\n");
-        
-        // 测试2: 高危医疗
-        System.out.println("========== 测试2: 高危医疗 ==========");
-        for (var output : graph.stream(Map.of("userInput", "我胸痛，呼吸困难"))) {
-            System.out.println("节点: " + output.node());
-            System.out.println("状态: " + output.state().data());
-            System.out.println("---");
-        }
-        
-        System.out.println("\n");
-        
-        // 测试3: 非高危医疗
-        System.out.println("========== 测试3: 非高危医疗 ==========");
-        for (var output : graph.stream(Map.of("userInput", "我有点感冒，头疼"))) {
-            System.out.println("节点: " + output.node());
-            System.out.println("状态: " + output.state().data());
-            System.out.println("---");
-        }
+        */
     }
 }
