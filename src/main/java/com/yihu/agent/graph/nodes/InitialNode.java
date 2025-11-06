@@ -10,6 +10,8 @@ public class InitialNode implements NodeAction<MedicalConsultationState> {
 
     @Override
     public Map<String, Object> apply(MedicalConsultationState medicalConsultationState) throws Exception {
-        return Map.of();
+        System.out.println("InitialNode 执行中...");
+        System.out.println("用户输入: " + medicalConsultationState.userInput());
+        return medicalConsultationState.data();
     }
 }
