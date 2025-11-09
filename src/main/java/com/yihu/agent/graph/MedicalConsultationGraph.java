@@ -184,6 +184,11 @@ public class MedicalConsultationGraph {
      * @param intentService 意图识别服务，使用 @AiService 自动注入
      */
     public static CompiledGraph<MedicalConsultationState> buildGraph(IntentRecognitionService intentService) throws GraphStateException {
+        return buildGraphWithNoCompile(intentService)
+                // 编译图
+                .compile();
+    }
+    public static StateGraph<MedicalConsultationState> buildGraphWithNoCompile(IntentRecognitionService intentService) throws GraphStateException {
         return new StateGraph<>(MedicalConsultationState.SCHEMA, MedicalConsultationState::new)
                 // 添加节点
                 .addNode("processUserInput", processUserInputNode)                          // 处理用户输入
@@ -191,13 +196,13 @@ public class MedicalConsultationGraph {
                 .addNode("generalChat", generalChatNode)                               // 普通对话
                 .addNode("highRiskMedical", highRiskMedicalNode)                        // 高危医疗
                 .addNode("lowRiskMedical", lowRiskMedicalNode)                          // 非高危医疗
-                
+
                 // START -> 处理用户输入
                 .addEdge(START, "processUserInput")
-                
+
                 // 处理用户输入 -> 意图识别
                 .addEdge("processUserInput", "intentRecognition")
-                
+
                 // 意图识别 -> 三个分支（条件边）
                 .addConditionalEdges(
                         "intentRecognition",           // 源节点：意图识别节点
@@ -208,16 +213,13 @@ public class MedicalConsultationGraph {
                                 "low_risk_medical", "lowRiskMedical"     // 非高危医疗
                         )
                 )
-                
+
                 // 三个分支都连接到 END
                 .addEdge("generalChat", END)
                 .addEdge("highRiskMedical", END)
-                .addEdge("lowRiskMedical", END)
-                
-                // 编译图
-                .compile();
+                .addEdge("lowRiskMedical", END);
     }
-    
+
     public static void main(String[] args) throws Exception {
         // 注意：在 Spring Boot 环境中，应该通过依赖注入获取 IntentRecognitionService
         // 这里仅作为示例，实际使用时应该从 Spring 容器中获取
