@@ -19,6 +19,11 @@
         <langgraph4j.version>1.7.1</langgraph4j.version>
     </properties>
     <dependencies>
+        <dependency>
+            <groupId>org.bsc.langgraph4j</groupId>
+            <artifactId>langgraph4j-studio-springboot</artifactId>
+            <version>${langgraph4j.version}</version>
+        </dependency>
         <!-- Spring Web 核心依赖，用于构建基于Servlet的Web应用 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
