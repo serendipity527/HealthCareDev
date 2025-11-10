@@ -20,6 +20,21 @@
     </properties>
     <dependencies>
         <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-onnx-scoring</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-embeddings-all-minilm-l6-v2</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-pgvector</artifactId>
+            <version>${langchain4j.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.bsc.langgraph4j</groupId>
             <artifactId>langgraph4j-studio-springboot</artifactId>
             <version>${langgraph4j.version}</version>
